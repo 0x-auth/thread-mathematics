@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "threadcoord"
+version = "0.1.0"
+description = "Decode when a message was born, from its ID alone. No API, no auth."
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [{name = "Abhishek Srivastava (Space)"}]
+keywords = ["snowflake", "timestamp", "slack", "twitter", "discord", "gmail", "uuid", "id"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/0x-auth/threadcoord"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["threadcoord*"]
