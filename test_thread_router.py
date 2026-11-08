@@ -70,4 +70,18 @@ results.append(ok(not one["context_bit_needed"] and one["coords"] == [v2.url()],
 # ---- 6. Reverse arrow ----
 results.append(ok(idx.reverse[r] == [p], "reverse index: answer -> question it resolved"))
 
+# ---- 7. Regressions ----
+results.append(ok(idx.route("getting 403 forbidden on kv.")["action"] == "route",
+                  "sentence-final punctuation does not break a match"))
+idx.add_closed("Preflight", Thread([Message(p, "q"), Message(r, "a", True)]), {"permission denied", "cors"})
+pd = idx.route("permission denied by cors")
+results.append(ok(pd["action"] != "silent" and pd["pattern"] == "Preflight", "multi-word trigger matches as a phrase"))
+results.append(ok(idx.route("denied permission by cors")["score"] < pd["score"], "phrase needs its words in order"))
+ans = Coord("slack", "C0999BRDDAM", "1760400744.994749", "1760404344.770487", "abhilasia")
+t = Thread([Message(p, "403 on kv v2"), Message(ans, "use the data/ prefix"), Message(r, "thanks, solved!", True)])
+results.append(ok(t.answer() == ans and t.ticks() == 1, "marker on 'thanks' -> answer is the reply before it"))
+t2 = Thread([Message(p, "403 on kv v2", True), Message(ans, "use the data/ prefix")])
+results.append(ok(t2.answer() == ans and t2.ticks() == 1, "marker on the question -> answer is the reply"))
+results.append(ok(not Thread([Message(p, "q", True)]).closed(), "marker on a lone question is not a closed thread"))
+
 print(f"\n{sum(results)}/{len(results)} passed")

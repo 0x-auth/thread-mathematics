@@ -47,9 +47,15 @@ def _slack(ts: str) -> Decoded:
         s = f"{s[:10]}.{s[10:]}"
     return Decoded(_dt.datetime.fromtimestamp(float(s), tz=_UTC), "slack", "microsecond")
 
+# Below this, an ID is a pre-snowflake sequential counter, not a timestamp.
+# Twitter's sequential tweet IDs ran up to ~29.7 billion before snowflake (Nov 2010).
+# 2**35 is above that and decodes to only ~8 s after the epoch, so no real
+# snowflake is lost. Discord used snowflakes from the start.
+_SEQUENTIAL_BELOW = {"twitter": 1 << 35, "discord": 1 << 22}
+
 def _snowflake(i, epoch, platform) -> Decoded:
     i = int(i)
-    if i < (1 << 22):   # too small to be a snowflake (pre-rollout sequential id)
+    if i < _SEQUENTIAL_BELOW.get(platform, 1 << 22):
         raise UndecodableID(f"{i} predates snowflake IDs on {platform}; sequential, no time")
     return _ms((i >> 22) + epoch, platform)
 

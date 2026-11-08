@@ -33,6 +33,11 @@ for plat,idv,label in [("uuid","509a9263-2bf0-421b-9853-16b896d49a4b","uuidv4 re
     try: decode(plat,idv); ok(False,label)
     except UndecodableID: ok(True,label)
 
+# sequential tweet ids of realistic size (up to ~29.7B) carry no time either
+for i in (1_000_000_000, 29_700_000_000):
+    try: decode("twitter", i); ok(False, f"sequential twitter {i:,} refused")
+    except UndecodableID: ok(True, f"sequential twitter {i:,} refused")
+
 ok(has_time("slack") and not has_time("reddit"),"has_time flags platforms")
 ok(not has_time("uuid","509a9263-2bf0-421b-9853-16b896d49a4b"),"has_time false for v4")
 

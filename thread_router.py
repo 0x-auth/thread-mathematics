@@ -86,27 +86,69 @@ class Thread:
         t0 = self.root.epoch_ms()
         return all(m.coord.epoch_ms() > t0 for m in self.messages[1:])
 
-    def closed(self) -> bool:
-        """Fixed point reached: a resolution marker exists."""
-        return any(m.resolved_marker for m in self.messages)
-
-    def ticks(self) -> int:
-        """Replies until closure = the work a routed duplicate saves."""
+    def _marker_index(self) -> int | None:
         for i, m in enumerate(self.messages):
             if m.resolved_marker:
                 return i
-        return len(self.messages) - 1
+        return None
+
+    def _answer_index(self) -> int | None:
+        """The marker closes the thread; the answer is the reply it confirms.
+        A marker on a bare acknowledgment ("thanks, solved") or on the question
+        itself (asker reacts on their own post) confirms the latest real reply
+        before it, or the last reply when the root carries the marker."""
+        k = self._marker_index()
+        if k is None:
+            return None
+        if k == 0:                                   # marker on the question
+            return len(self.messages) - 1 if len(self.messages) > 1 else None
+        i = k
+        while i > 0 and _is_ack(self.messages[i].text):
+            i -= 1
+        return i if i > 0 else k
+
+    def closed(self) -> bool:
+        """Fixed point reached: a resolution marker exists and confirms a reply."""
+        return self._answer_index() is not None
+
+    def ticks(self) -> int:
+        """Replies until the answer = the work a routed duplicate saves."""
+        a = self._answer_index()
+        return a if a is not None else len(self.messages) - 1
 
     def answer(self) -> Coord | None:
-        for m in self.messages:
-            if m.resolved_marker:
-                return m.coord
-        return None
+        a = self._answer_index()
+        return self.messages[a].coord if a is not None else None
+
+
+_ACK = re.compile(r"^\W*(thanks?|thank you|thx|ty|solved|fixed|resolved|works?|worked|"
+                  r"that worked|done|perfect|great|got it|ok(ay)?)\b[\w\s,.!👍✅🙏]*$", re.I)
+
+def _is_ack(text: str) -> bool:
+    t = (text or "").strip()
+    return bool(t) and len(t) <= 40 and bool(_ACK.match(t))
 
 
 # ---------------------------------------------------------------------- index
 def _tokens(s: str) -> set[str]:
-    return set(re.findall(r"[a-z0-9][a-z0-9._/-]+", s.lower()))
+    # sentence punctuation is not part of a token: "kv." -> "kv", "data/." -> "data/"
+    return {t.rstrip(".-") for t in re.findall(r"[a-z0-9][a-z0-9._/-]+", s.lower())} - {""}
+
+
+def _hits(q: set[str], qtext: str, terms: set[str]) -> int:
+    """Single-word terms match tokens; multi-word terms match as a phrase."""
+    n = 0
+    for t in terms:
+        if " " in t:
+            n += f" {' '.join(t.lower().split())} " in qtext
+        else:
+            n += t in q
+    return n
+
+
+def _phrase_text(s: str) -> str:
+    words = [w.rstrip(".-") for w in re.findall(r"[a-z0-9][a-z0-9._/-]*", s.lower())]
+    return " " + " ".join(w for w in words if w) + " "
 
 
 @dataclass
@@ -144,14 +186,15 @@ class Index:
     # -------------------------------------------------------------- router
     def route(self, question: str, hi: float = 2.0, lo: float = 1.0) -> dict:
         q = _tokens(question)
+        qtext = _phrase_text(question)
         best, best_score = None, 0.0
         for p in self.patterns.values():
-            if q & p.negative:
+            if _hits(q, qtext, p.negative):
                 continue
-            req = len(q & p.triggers)
+            req = _hits(q, qtext, p.triggers)
             if not req:
                 continue
-            score = (req + 0.5 * len(q & p.boost)) * p.confidence
+            score = (req + 0.5 * _hits(q, qtext, p.boost)) * p.confidence
             if score > best_score:
                 best, best_score = p, score
         if not best or best_score < lo:
